@@ -1,3 +1,6 @@
+# Mac OS X
+.DS_Store
+
 # Object files
 *.o
 *.ko
@@ -27,3 +30,28 @@
 *.i*86
 *.x86_64
 *.hex
+
+# Latex
+*.aux
+*.glo
+*.idx
+*.log
+*.toc
+*.ist
+*.acn
+*.acr
+*.alg
+*.bbl
+*.blg
+*.dvi
+*.glg
+*.gls
+*.ilg
+*.ind
+*.lof
+*.lot
+*.maf
+*.mtc
+*.mtc1
+*.out
+*.synctex.gz

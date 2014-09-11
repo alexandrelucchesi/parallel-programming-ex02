@@ -1,0 +1,139 @@
+%\documentclass[12pt,a4paper]{report}
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[brazil]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx,url}
+\usepackage{hyperref}
+%\usepackage{mathptmx}
+\usepackage{lipsum}
+\usepackage{booktabs}
+\usepackage{pifont}
+\usepackage{textcomp}
+\usepackage{amsmath,amssymb}
+\usepackage{listings}
+\usepackage[scaled=0.8]{beramono}
+
+\pdfgentounicode=1
+
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+
+\begin{document}
+
+\input{./cover.tex}
+
+\section{Introdução}
+Este relatório tem como objetivo apresentar os resultados obtidos a partir da
+execução do primeiro exercício de programação paralela, que consiste na
+paralelização do algoritmo \emph{count sort} utilizando a biblioteca OpenMP\@.
+Primeiramente, o algoritmo desenvolvido e a estratégia de paralelização
+utilizada é apresentada. Em seguida, é feita uma análise de desempenho
+comparando os tempos de execução do algoritmo em diversas configurações, isto é,
+variando-se a estratégia de escalonamento, o tamanho dos \textit{chunks} e o
+número de \textit{threads}. O código completo deste trabalho está publicamente
+disponível no
+GitHub~\footnote{\url{https://github.com/alexandrelucchesi/parallel-programming-ex01}}.
+
+\section{O Algoritmo}
+O programa desenvolvido contempla três funcionalidades principais: geração de um
+arquivo de dados contendo um número arbitrário de valores de ponto-flutuante,
+processamento de um único arquivo de dados e a geração de um \textit{benchmark}.
+Essas três funcionalidades são detalhadas nesta seção.
+
+\subsection{Geração do Arquivo de Dados}
+O algoritmo \textit{count sort} é um algoritmo de ordenamento que foi utilizado
+neste trabalho para ordenar um vetor de números de ponto-flutuante. Dessa forma,
+foi necessária a criação de funções para a geração de quantidades configuráveis
+de números de ponto-flutante e que os gravasse em um formato apropriado para
+servir de entrada para o programa, possibilitando a fácil experimentação do
+\textit{count sort} com diferentes entradas de dados.
+
+A interface dessas funções é apresentada a seguir:
+
+\begin{verbatim}
+void generate_floats(FILE* out, int count);
+int read_input(FILE* fp, float** vector, int* size);
+float* parse_floats(char* values_str, int count);
+\end{verbatim}
+
+A função \texttt{generate\_floats} recebe um arquivo de destino e a quantidade de
+números que se deseja gerar. A função \texttt{read\_input} recebe um arquivo (no
+formato gerado por \texttt{generate\_floats}) e retorna em \texttt{vector} e
+\texttt{size} o vetor e seu tamanho, respectivamente. Por fim, a função
+\texttt{parse\_floats} é utilizada internamente por \texttt{read\_input} para
+realizar o \textit{parsing} de \textit{strings} para \textit{floats}.
+
+Para gerar um arquivo de dados, \texttt{vec.dat}, contendo, por exemplo, 1000
+elementos, basta executar o binário passando-se a \textit{flag} \texttt{-gen},
+conforme descrito a seguir:
+
+\begin{verbatim}
+$ ./a.out -gen vec.dat 1000
+\end{verbatim}
+
+\subsection{Processamento}
+O processamento de um arquivo de dados foi encapsulado na função
+\texttt{process}, cuja assinatura é apresentada a seguir:
+
+\begin{verbatim}
+int process(float **vec, int *vec_size, double *time_sorting_only, double
+        *time_with_input, const char *filename, omp_sched_t kind, int
+        chunk_size);
+\end{verbatim}
+
+Os quatro primeiros parâmetros: \texttt{vec}, \texttt{vec\_size},
+\texttt{time\_sorting\_only} e \texttt{time\_with\_input} são, na verdade, retornos
+da função \texttt{process}, e retornam respectivamente, o vetor de
+\textit{floats} ordenado, o tamanho do vetor, o tempo transcorrido considerando
+apenas a execução do \textit{count sort} e o tempo transcorrido desde a entrada
+de dados até o término da execução da função de ordenação. Os demais parâmetros
+são utilizados para parametrizar a execução da função \textit{count\_sort} e
+equivalem, respectivamente, ao nome do arquivo de dados, à política de
+escalonamento do OpenMP (\textit{static}, \textit{dynamic}, \textit{guided} ou
+\textit{auto}) e ao tamanho do \textit{chunk}.
+
+Encapsular a lógica de processamento na função \textit{process} permitiu a
+automatização do \textit{benchmarking} da aplicação, por meio do desenvolvimento
+da função \texttt{bench} (descrita a seguir), evitando trabalho manual.
+
+\subsection{\textit{Benchmark}}
+ 
+\section{Resultados}
+
+
+\section{Conclusão}
+Por fim, é válido ressaltar que o programa está todo parametrizado via diretivas
+de pré-processamento (\texttt{\#define}) e aceita alguns parâmetros em tempo de
+execução (como o tamanho do \textit{chunk} e a política de escalonamento),
+possibilitando a experimentação com diferentes configurações. O \textit{design}
+escolhido permite variar de forma fácil a política de escalonamento, o tamanho
+dos \textit{chunks} e a quantidade de \textit{threads} de forma não intrusiva e
+modular.
+
+%% Booktabs require to add \usepackage{booktabs} to your document preamble
+%\begin{table}[h]
+%\centering
+%\caption{Cronograma de Execução}
+%\begin{tabular}{@{}ccccccc@{}}
+%\toprule
+%Etapa & Semana 1   & Semana 2   & Semana 3   & Semana 4   & Semana 5   & Semana 6      \\ \midrule
+%1     & \ding{117} & \ding{117} & \ding{117} &            &            & \\ \midrule
+%2     &            &            & \ding{117} & \ding{117} &            & \\ \midrule
+%3     &            &            &            &            & \ding{117} & \\ \midrule
+%4     &            &            &            &            & \ding{117} & \ding{117}    \\ \midrule \\ \bottomrule
+%\end{tabular}
+%\end{table}
+
+\bibliographystyle{plain}
+\bibliography{references.bib}
+
+\end{document}
+
+
+
+
+
+
+
+
