@@ -1,0 +1,10 @@
+Looping...
+Performing iteration 0, chunk size is 1.
+Performing iteration 1, chunk size is 10.
+Performing iteration 2, chunk size is 100.
+Performing iteration 3, chunk size is 1000.
+Performing iteration 4, chunk size is 10000.
+Performing iteration 5, chunk size is 100000.
+Generating output CSV file...
+File 'bench.csv' successfully generated! :-)
+Execution time: 464.728416 seconds.
