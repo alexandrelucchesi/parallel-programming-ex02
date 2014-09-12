@@ -1,12 +1,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <time.h>
 #include <omp.h>
 
-//#define DEBUG
+//#define DEBUG_BENCH_01
+//#define DEBUG_BENCH_02
+
+#ifdef DEBUG_BENCH_01
+#define DEBUG 
+#endif
+#ifdef DEBUG_BENCH_02
+#define DEBUG 
+#endif
+
 #define PARALLEL
-#define BENCH_EXEC_TIMES 1
+#define BENCH_EXEC_TIMES 3
 
 
 // ----------------------------------------------------------
@@ -18,6 +28,8 @@ typedef struct bench_res {
     double static_input_sorting_time;
     double dynamic_sorting_time;
     double dynamic_input_sorting_time;
+    double guided_sorting_time;
+    double guided_input_sorting_time;
 } bench_res;
 
 /**
@@ -33,22 +45,35 @@ typedef enum action {
     BENCHMARK = 2
 } action;
 
+typedef enum outputType {
+    CSV = 0,
+    LATEX = 1
+} outputType;
+
+typedef enum benchType {
+    SCHED_CHUNK = 0,
+    SCHED_THREAD = 1
+} benchType;
+
 
 // ----------------------------------------------------------
 // Type signatures
 // ----------------------------------------------------------
 int process(float **vec, int *vec_size, double *time_sorting_only, double
         *time_with_input, const char *filename, omp_sched_t kind, int
-        chunk_size);
-void count_sort(float[], int, omp_sched_t, int);
+        chunk_size, int thread_num);
+void count_sort(float[], int, omp_sched_t, int chunk_size, int thread_num);
 
 void generate_floats(FILE* out, int count);
 int read_input(FILE* fp, float** vector, int* size);
 float* parse_floats(char* values_str, int count);
 
-int bench(const char* filename);
+int bench(const char* filename, outputType type);
+bench_res* bench_sched_chunk(const char *filename, int power_of_2);
+bench_res* bench_sched_thread(const char *filename, int chunk_size, int max_threads);
 double calculate_mean(const double *vec, int size);
-void write_csv(bench_res *res, int size, FILE *fp);
+void write_latex_tables(bench_res *res, benchType type, int size, FILE *fp);
+void write_csv(bench_res *res, benchType type, int size, FILE *fp);
 
 void usage();
 action parse_params(int argc, char *argv[], char **filename, int *num_items,
@@ -58,23 +83,26 @@ action parse_params(int argc, char *argv[], char **filename, int *num_items,
 // ----------------------------------------------------------
 // Functions
 // ----------------------------------------------------------
-void count_sort(float a[], int n, omp_sched_t kind, int chunk_size) {
+void count_sort(float a[], int n, omp_sched_t kind, int chunk_size, int num_threads) {
     // According to the documentation, the variables declared before the
     // parallel pragma are *shared*.
     float* temp = malloc(n * sizeof(float));
 
-#ifdef DEBUG
+#ifdef DEBUG_BENCH_01
     // This is useful to count the number of iterations each thread calculated,
     // particularlly when using a *dynamic* schedule.
     int *thread_iteration_count, thread_iteration_count_size;
 #endif
 
-#ifdef PARALLEL
+#ifndef PARALLEL
+    int count;
+#else
+    if (num_threads > 0) omp_set_num_threads(num_threads);
 #pragma omp parallel
     {
         int count; // *Private* variable.
 
-#ifdef DEBUG
+#ifdef DEBUG_BENCH_01
 #pragma omp single // Serializes allocation of shared array (executed by just one thread).
         {
             thread_iteration_count = (int *) calloc(omp_get_num_threads(), sizeof(int));
@@ -84,12 +112,18 @@ void count_sort(float a[], int n, omp_sched_t kind, int chunk_size) {
             printf("[DEBUG] Current number of threads: %d.\n", omp_get_num_threads());
         }
 #endif
+
         omp_set_schedule(kind, chunk_size);
+
+#ifdef DEBUG_BENCH_02
+        printf("my_rank: %d, num_threads: %d, omp_num_threads: %d.\n", omp_get_thread_num(), num_threads, omp_get_num_threads());
+#endif
+
 #pragma omp for schedule(runtime)
 #endif
         for (int i = 0; i < n; i++) {
             count = 0;
-#ifdef DEBUG
+#ifdef DEBUG_BENCH_01
             printf("\t[DEBUG] I'm thread: %d calculating iteration %d...\n", omp_get_thread_num(), i);
             thread_iteration_count[omp_get_thread_num()]++;
 #endif
@@ -104,9 +138,11 @@ void count_sort(float a[], int n, omp_sched_t kind, int chunk_size) {
             // thread, I believe it doesn't need to be marked as *critical*.
             temp[count] = a[i];
         }
+#ifdef PARALLEL
     }
+#endif
 
-#ifdef DEBUG
+#ifdef DEBUG_BENCH_01
     // "Join" should have occured at this point, so omp_get_num_threads() is expected to return just 1.
     printf("[DEBUG] Current number of threads: %d.\n", omp_get_num_threads()); // assert(1);
     // Prints how many iterations each thread calculated.
@@ -132,60 +168,207 @@ double calculate_mean(const double *vec, int size) {
 }
 
 
-void write_csv(bench_res *res, int size, FILE *fp) {
+void write_csv(bench_res *res, benchType type, int size, FILE *fp) {
     // Writes header... (using ';' for better compatibility)
-    fputs("Chunk Size, Static, Static w/ input, Dynamic, Dynamic w/ input\n", fp);
+    fprintf(fp, "%s, ST, ST w/ input, DYN, DYN w/ input, GD, GD w/ input\n", type == SCHED_CHUNK ? "Chunk size" : "Threads");
 
     // Writes body...
     for (int i = 0; i < size; i++)
-        fprintf(fp, "%d, %f, %f, %f, %f\n", res[i].chunk_size,
+        fprintf(fp, "%d, %f, %f, %f, %f, %f, %f\n", res[i].chunk_size,
                 res[i].static_sorting_time, res[i].static_input_sorting_time,
-                res[i].dynamic_sorting_time, res[i].dynamic_input_sorting_time);
+                res[i].dynamic_sorting_time, res[i].dynamic_input_sorting_time,
+                res[i].guided_sorting_time, res[i].guided_input_sorting_time);
 }
 
 
-int bench(const char* filename) {
-    FILE *fp;
+void write_latex_tables(bench_res *res, benchType type, int size, FILE *fp) {
+    int i;
+
+    fputs("\\begin{tabular}{@{}ccccccc@{}}\n", fp);
+    fputs("\\toprule\n", fp);
+    fprintf(fp, "%s & ST & ST w/ input & DYN & DYN w/ input & GD & GD w/ input \\\\ \\midrule\n", type == SCHED_CHUNK ? "C. Size" : "Threads");
+
+    for (i = 0; i < size - 1; i++) {
+        if (type == SCHED_CHUNK)
+            fprintf(fp, "$2^{%d}$", (int) log2(res[i].chunk_size));
+        else
+            fprintf(fp, "%d", res[i].chunk_size);
+        fprintf(fp, " & %f & %f & %f & %f & %f & %f \\\\ \\midrule\n",
+            res[i].static_sorting_time, res[i].static_input_sorting_time,
+            res[i].dynamic_sorting_time, res[i].dynamic_input_sorting_time,
+            res[i].guided_sorting_time, res[i].guided_input_sorting_time);
+    }
+
+    if (size > 0) {
+        if (type == SCHED_CHUNK)
+            fprintf(fp, "$2^{%d}$", (int) log2(res[i].chunk_size));
+        else
+            fprintf(fp, "%d", res[i].chunk_size);
+        fprintf(fp, " & %f & %f & %f & %f & %f & %f \\\\ \\bottomrule\n",
+                res[i].static_sorting_time, res[i].static_input_sorting_time,
+                res[i].dynamic_sorting_time, res[i].dynamic_input_sorting_time,
+                res[i].guided_sorting_time, res[i].guided_input_sorting_time);
+        fputs("\\end{tabular}\n", fp);
+    }
+}
+
+bench_res* bench_sched_chunk(const char *filename, int power_of_2) {
     double static_sorting_times[BENCH_EXEC_TIMES];
     double static_input_sorting_times[BENCH_EXEC_TIMES];
     double dynamic_sorting_times[BENCH_EXEC_TIMES];
     double dynamic_input_sorting_times[BENCH_EXEC_TIMES];
-    bench_res res[6];
+    double guided_sorting_times[BENCH_EXEC_TIMES];
+    double guided_input_sorting_times[BENCH_EXEC_TIMES];
+    bench_res *res = (bench_res *) calloc(power_of_2 + 1, sizeof(bench_res));
 
-    /* static/dynamic, varying chunk size and considering/not considering input
-     * time. */
-    fp = fopen("bench.csv", "w");
-
+    printf("===================================================================================================\n");
+    printf("Benchmarking: static/dynamic/guided, varying chunk size and considering/not considering input time.\n");
+    printf("===================================================================================================\n");
     printf("Looping...\n");
-    for (int i = 1, k = 0; i <= 100000; i *= 10, k++) {
+    for (int i = 1, k = 0; i <= pow(2, power_of_2); i *= 2, k++) {
         printf("Performing iteration %d, chunk size is %d.\n", k, i);
         for (int j = 0; j < BENCH_EXEC_TIMES; j++) {
             double time_sorting_only, time_with_input;
 
             // Process using static scheduling.
-            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_static, i) != 0)
-                return -1;
+            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_static, i, -1) != 0)
+                return NULL;
             static_sorting_times[j] = time_sorting_only; 
             static_input_sorting_times[j] = time_with_input;
 
             // Process using dynamic scheduling.
-            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_dynamic, i) != 0)
-                return -1;
+            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_dynamic, i, -1) != 0)
+                return NULL;
             dynamic_sorting_times[j] = time_sorting_only;
             dynamic_input_sorting_times[j] = time_with_input;
+
+            // Process using guided scheduling.
+            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_guided, i, -1) != 0)
+                return NULL; 
+            guided_sorting_times[j] = time_sorting_only;
+            guided_input_sorting_times[j] = time_with_input;
         }
         res[k].chunk_size = i;
         res[k].static_sorting_time = calculate_mean(static_sorting_times, BENCH_EXEC_TIMES);
         res[k].static_input_sorting_time = calculate_mean(static_input_sorting_times, BENCH_EXEC_TIMES);
         res[k].dynamic_sorting_time = calculate_mean(dynamic_sorting_times, BENCH_EXEC_TIMES);
         res[k].dynamic_input_sorting_time = calculate_mean(dynamic_input_sorting_times, BENCH_EXEC_TIMES);
+        res[k].guided_sorting_time = calculate_mean(guided_sorting_times, BENCH_EXEC_TIMES);
+        res[k].guided_input_sorting_time = calculate_mean(guided_input_sorting_times, BENCH_EXEC_TIMES);
     }
 
-    printf("Generating output CSV file...\n");
-    write_csv(res, 6, fp);
-    printf("File 'bench.csv' successfully generated! :-)\n");
+    return res;
+}
+
+
+bench_res* bench_sched_thread(const char *filename, int chunk_size, int max_threads) {
+    double static_sorting_times[BENCH_EXEC_TIMES];
+    double static_input_sorting_times[BENCH_EXEC_TIMES];
+    double dynamic_sorting_times[BENCH_EXEC_TIMES];
+    double dynamic_input_sorting_times[BENCH_EXEC_TIMES];
+    double guided_sorting_times[BENCH_EXEC_TIMES];
+    double guided_input_sorting_times[BENCH_EXEC_TIMES];
+    bench_res *res = (bench_res *) calloc(max_threads, sizeof(bench_res));
+
+    printf("===================================================================================================\n");
+    printf("Benchmarking: varying thread num.\n");
+    printf("===================================================================================================\n");
+    printf("Looping...\n");
+    for (int i = 1; i <= max_threads; i++) {
+        printf("Performing iteration %d, thread count is %d.\n", i - 1, i);
+        for (int j = 0; j < BENCH_EXEC_TIMES; j++) {
+            double time_sorting_only, time_with_input;
+
+            // Process using static scheduling.
+            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_static, chunk_size, i) != 0)
+                return NULL;
+            static_sorting_times[j] = time_sorting_only; 
+            static_input_sorting_times[j] = time_with_input;
+
+            // Process using dynamic scheduling.
+            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_dynamic, chunk_size, i) != 0)
+                return NULL;
+            dynamic_sorting_times[j] = time_sorting_only;
+            dynamic_input_sorting_times[j] = time_with_input;
+
+            // Process using guided scheduling.
+            if (process(NULL, NULL, &time_sorting_only, &time_with_input, filename, omp_sched_guided, chunk_size, i) != 0)
+                return NULL;
+            guided_sorting_times[j] = time_sorting_only;
+            guided_input_sorting_times[j] = time_with_input;
+        }
+        res[i-1].chunk_size = i; // chunk_size used to store the thread count...
+        res[i-1].static_sorting_time = calculate_mean(static_sorting_times, BENCH_EXEC_TIMES);
+        res[i-1].static_input_sorting_time = calculate_mean(static_input_sorting_times, BENCH_EXEC_TIMES);
+        res[i-1].dynamic_sorting_time = calculate_mean(dynamic_sorting_times, BENCH_EXEC_TIMES);
+        res[i-1].dynamic_input_sorting_time = calculate_mean(dynamic_input_sorting_times, BENCH_EXEC_TIMES);
+        res[i-1].guided_sorting_time = calculate_mean(guided_sorting_times, BENCH_EXEC_TIMES);
+        res[i-1].guided_input_sorting_time = calculate_mean(guided_input_sorting_times, BENCH_EXEC_TIMES);
+    }
+
+    return res;
+}
+
+
+int bench(const char* filename, outputType type) {
+    FILE *fp;
+    bench_res *res;
+
+    // Benchmarking 01...
+    if (type == CSV) {
+        fp = fopen("bench_sched_chunk.csv", "w");
+    } else {
+        fp = fopen("./report/bench_sched_chunk.tex", "w");
+    }
+
+    if (!fp) return -1;
+
+    // We vary the chunk size from 1 to 2^16.
+    res = bench_sched_chunk(filename, 16);
+    if (res == NULL) return -1;
+
+    if (type == CSV) {
+        printf("Generating output CSV file...\n");
+        write_csv(res, CSV, 17, fp);
+        printf("File 'bench_sched_chunk.csv' successfully generated! :-)\n");
+    } else {
+        printf("Generating output latex tables...\n");
+        write_latex_tables(res, SCHED_CHUNK, 17, fp);
+        printf("File 'bench_sched_chunk.tex' successfully generated! :-)\n");
+    }
 
     fclose(fp);
+    free(res);
+
+    printf("\n");
+
+    // Benchmarking 02...
+    if (type == CSV) {
+        fp = fopen("bench_sched_thread.csv", "w");
+    } else {
+        fp = fopen("./report/bench_sched_thread.tex", "w");
+    }
+
+    if (!fp) return -1;
+
+    // We vary the thread num from 1 to 8 using 256 as the chunk size.
+    res = bench_sched_thread(filename, 256, 8);
+    if (res == NULL) return -1;
+
+    if (type == CSV) {
+        printf("Generating output CSV file...\n");
+        write_csv(res, CSV, 8, fp);
+        printf("File 'bench_sched_thread.csv' successfully generated! :-)\n");
+    } else {
+        printf("Generating output latex tables...\n");
+        write_latex_tables(res, SCHED_THREAD, 8, fp);
+        printf("File 'bench_sched_thread.tex' successfully generated! :-)\n");
+    }
+
+    fclose(fp);
+    free(res);
+
+    printf("\n");
 
     return 0;
 } /* bench */
@@ -252,7 +435,7 @@ void usage() {
     printf("./a.out -bench filename\n");
     printf("\n");
     printf("Options' meanings:\n");
-    printf("-k = schedule: {static|dynamic}.\n");
+    printf("-k = schedule: {static|dynamic|guided}.\n");
     printf("-c = chunk size: number\n");
 }
 
@@ -264,23 +447,17 @@ action parse_params(int argc, char *argv[], char **filename, int *num_items, omp
     } else if (argc >= 3) {
         if (strcmp(argv[1], "-bench") == 0) {
             *filename = argv[2];
-            //if (strcmp(argv[3], "-s") == 0) {
-            //   char *schedule = argv[4];
-            //   if (strcmp(schedule, "static") == 0) {
-            //       *kind = omp_sched_static;
-            //   } else if (strcmp(schedule, "dynamic") == 0) {
-            //       *kind = omp_sched_dynamic;
-            //   }
-            //}
             return BENCHMARK;
         } else if (strcmp(argv[1], "-gen") == 0) {
             *filename = argv[2];
             *num_items = atoi(argv[3]);
             return GENERATE;
-        } else if (argc == 8) {
+        } else if (argc == 6) {
             *filename = argv[1];
             if (strcmp(argv[3], "dynamic") == 0)
                 *kind = omp_sched_dynamic;
+            else if (strcmp(argv[3], "guided") == 0)
+                *kind = omp_sched_guided;
             else
                 *kind = omp_sched_static;
             *chunk_size = atoi(argv[5]);
@@ -295,7 +472,7 @@ action parse_params(int argc, char *argv[], char **filename, int *num_items, omp
 // ----------------------------------------------------------
 // Main
 // ----------------------------------------------------------
-int process(float **vec, int *vec_size, double *time_sorting_only, double *time_with_input, const char *filename, omp_sched_t kind, int chunk_size) {
+int process(float **vec, int *vec_size, double *time_sorting_only, double *time_with_input, const char *filename, omp_sched_t kind, int chunk_size, int thread_num) {
      // `chunk_size` 0 or negative to use whatever default is. As I set
      // `omp_sched_auto` before, this value will be ignored anyway (when passed
      // to `omp_set_schedule()`).
@@ -317,7 +494,7 @@ int process(float **vec, int *vec_size, double *time_sorting_only, double *time_
 
     // Measures sorting only.
     double t2 = omp_get_wtime();
-    count_sort(vector, vector_size, kind, chunk_size);
+    count_sort(vector, vector_size, kind, chunk_size, thread_num);
     double t3 = omp_get_wtime();
 
     // Returns the sorted vector and its size.
@@ -350,6 +527,7 @@ int main(int argc, char *argv[]) {
 
     // Gets start time.
     double exec_time = omp_get_wtime();
+    double sorting_only_time, with_input_time;
 
     action act = parse_params(argc, argv, &filename, &num_items, &kind, &chunk_size);
 
@@ -367,12 +545,12 @@ int main(int argc, char *argv[]) {
             fclose(handle);
             return 0;
         case BENCHMARK:
-            if (bench(filename) != 0) {
+            if (bench(filename, LATEX) != 0) {
                 printf("It shouldn't happen! :-(\n");
                 return -1;
             }
         default:
-            if (process(&vector, &vector_size, NULL, NULL, filename, kind, chunk_size) != 0) {
+            if (process(&vector, &vector_size, &sorting_only_time, &with_input_time, filename, kind, chunk_size, -1) != 0) {
                 printf("It shouldn't happen! :-(\n");
                 return -1;
             }
@@ -388,6 +566,7 @@ int main(int argc, char *argv[]) {
         printf("\n");
     }
     printf ("Execution time: %f seconds.\n", exec_time);
+//    printf ("Serial time: %f and %f.\n", sorting_only_time, with_input_time);
 
     return 0;
 }

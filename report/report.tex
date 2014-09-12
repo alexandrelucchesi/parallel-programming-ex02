@@ -14,6 +14,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{listings}
 \usepackage[scaled=0.8]{beramono}
+\usepackage{lscape}
 
 \pdfgentounicode=1
 
@@ -31,9 +32,23 @@ Primeiramente, o algoritmo desenvolvido e a estratégia de paralelização
 utilizada é apresentada. Em seguida, é feita uma análise de desempenho
 comparando os tempos de execução do algoritmo em diversas configurações, isto é,
 variando-se a estratégia de escalonamento, o tamanho dos \textit{chunks} e o
-número de \textit{threads}. O código completo deste trabalho está publicamente
-disponível no
+número de \textit{threads}. O código-fonte completo deste trabalho juntamente
+com os \texttt{.text} deste relatório estão publicamente disponíveis no
 GitHub~\footnote{\url{https://github.com/alexandrelucchesi/parallel-programming-ex01}}.
+
+\subsection{\textit{Hardware} Utilizado}
+
+\begin{itemize}
+    \item Processador: Intel Core i7
+    \item Velocidade: 2 GHz
+    \item Número de processadores: 1
+    \item Número de \textit{cores} reais: 2
+    \item Número de \textit{cores} virtuais: 4 (HyperThreading)
+    \item L1 cache: 32KB
+    \item L2 cache (per core): 256KB
+    \item L3 cache: 4MB
+\end{itemize}
+
 
 \section{O Algoritmo}
 O programa desenvolvido contempla três funcionalidades principais: geração de um
@@ -42,6 +57,7 @@ processamento de um único arquivo de dados e a geração de um \textit{benchmar
 Essas três funcionalidades são detalhadas nesta seção.
 
 \subsection{Geração do Arquivo de Dados}
+\label{sec:data-gen}
 O algoritmo \textit{count sort} é um algoritmo de ordenamento que foi utilizado
 neste trabalho para ordenar um vetor de números de ponto-flutuante. Dessa forma,
 foi necessária a criação de funções para a geração de quantidades configuráveis
@@ -77,9 +93,10 @@ O processamento de um arquivo de dados foi encapsulado na função
 \texttt{process}, cuja assinatura é apresentada a seguir:
 
 \begin{verbatim}
-int process(float **vec, int *vec_size, double *time_sorting_only, double
-        *time_with_input, const char *filename, omp_sched_t kind, int
-        chunk_size);
+int process(float **vec, int *vec_size, double *time_sorting_only,
+    double*time_with_input, const char *filename, omp_sched_t kind,
+    int chunk_size, int thread_num);
+void count_sort(float a[], int n, omp_sched_t kind, int chunk_size);
 \end{verbatim}
 
 Os quatro primeiros parâmetros: \texttt{vec}, \texttt{vec\_size},
@@ -88,18 +105,231 @@ da função \texttt{process}, e retornam respectivamente, o vetor de
 \textit{floats} ordenado, o tamanho do vetor, o tempo transcorrido considerando
 apenas a execução do \textit{count sort} e o tempo transcorrido desde a entrada
 de dados até o término da execução da função de ordenação. Os demais parâmetros
-são utilizados para parametrizar a execução da função \textit{count\_sort} e
+são utilizados para parametrizar a execução da função \texttt{count\_sort} e
 equivalem, respectivamente, ao nome do arquivo de dados, à política de
 escalonamento do OpenMP (\textit{static}, \textit{dynamic}, \textit{guided} ou
-\textit{auto}) e ao tamanho do \textit{chunk}.
+\textit{auto}), ao tamanho do \textit{chunk} e ao número de \textit{threads} a
+serem criadas.
+
+Para processar um único arquivo, basta executar o binário passando-se o arquivo
+de dados e \textit{flags} opcionais de seleção da política de escalonamento,
+tamanho do \textit{chunk} ou quantidade de \textit{threads}. Por padrão,
+utiliza-se \texttt{static}, tamanho do \textit{chunk} 1 e o número padrão de
+\textit{threads} do OpenMP (depende da máquina sendo executada). O trecho
+abaixo ilustra o processamento do arquivo \texttt{vec.dat}, com escalonamento
+dinâmico e tamanho de \textit{chunk} 4:
+
+\begin{verbatim}
+$ ./a.out vec.dat -k dynamic -c 4
+\end{verbatim}
 
 Encapsular a lógica de processamento na função \textit{process} permitiu a
 automatização do \textit{benchmarking} da aplicação, por meio do desenvolvimento
 da função \texttt{bench} (descrita a seguir), evitando trabalho manual.
 
+Um dos objetivos deste trabalho consistiu na experimentação da biblioteca
+OpenMP\@. O trecho de código a seguir apresenta a funcionalidade central da
+função \texttt{count\_sort} e a estratégia de paralelização adotada:
+
+\begin{verbatim}
+...
+    // Set number of threads to be created.
+    if (num_threads > 0) omp_set_num_threads(num_threads);
+#pragma omp parallel
+    {
+        int count; // *Private* variable.
+
+        // Set scheduling policy and chunk size at runtime.
+        omp_set_schedule(kind, chunk_size);
+
+#pragma omp for schedule(runtime)
+        for (int i = 0; i < n; i++) {
+            count = 0;
+            for (int j = 0; j < n; j++)
+                if (a[j] < a[i])
+                    count++;
+                else if (a[j] == a[i] && j < i)
+                    count++;
+            temp[count] = a[i];
+        }
+    }
+...
+\end{verbatim}
+
+A variável \texttt{count} é declarada dentro de uma seção paralela e, portanto,
+é atribuída um escopo privado~\footnote{Poderia-se declarar esse escopo via
+\textit{clauses} dentro do \texttt{pragma}.}. As funções
+\texttt{omp\_set\_num\_threads} e \texttt{omp\_set\_schedule} são padrões do
+OpenMP e consistem em uma forma dinâmica de se configurar, respectivamente, a
+quantidade de \textit{threads}, e a política de escalonamento e o tamanho do
+\textit{chunk}. Esses parâmetros são utilizados em tempo de execução para
+atribuir tarefas às \textit{threads} dentro do \texttt{for} (observe a clause
+\texttt{schedule(runtime)}). O vetor \texttt{temp} é uma variável compartilhada
+que conterá a sequência de números ordenada no término das iterações. É
+importante notar que não nenhum mecanismo de sincronização (como a utilização de
+\textit{locks} ou declarar \texttt{temp} como \emph{critical}) foi necessário
+para a criação de uma seção crítica em torno de \texttt{temp}, uma vez que
+\texttt{count} retorna um valor diferente (indexando uma posição de memória
+diferente) para cada \textit{thread} e, portanto, não há condições de corrida.
+
+
 \subsection{\textit{Benchmark}}
+O \textit{benchmarking} da aplicação é feito a partir de uma série de funções,
+cujas assinaturas são apresentadas a seguir:
+
+\begin{verbatim}
+int bench(const char* filename);
+bench_res* bench_sched_chunk(const char *filename, int power_of_2);
+bench_res* bench_sched_thread(const char *filename, int chunk_size, int max_threads);
+double calculate_mean(const double *vec, int size);
+void write_csv(bench_res *res, int size, FILE *fp);
+void write_latex_tables(bench_res *res, int size, FILE *fp);
+\end{verbatim}
+
+A função \texttt{bench} é responsável por orquestrar as funções
+\texttt{bench\_sched\_chunk} e \texttt{bench\_sched\_thread} na geração dos
+relatórios contendo os tempos de execução do algoritmo em diferentes
+configurações. Essas funções realizam dois tipos diferentes de
+\texttt{benchmark}: a primeira varia o tamanho do \textit{chunk} e as políticas
+de escalonamento enquanto mantém o número de \textit{threads}
+fixo~\footnote{Esse valor é o valor padrão atribuído pelo OpenMP de acordo com a
+máquina que está executando o algoritmo. No \textit{hardware} utilizado neste
+trabalho, este valor padrão é 4, uma vez que o processador possui 2
+\textit{cores} em HyperThreading.}; já a segunda mantém o tamanho do
+\textit{chunk} fixo~\footnote{Adotou-se o valor do \textit{chunk} como sendo
+256, que foi o valor ótimo obtido a partir do primeiro experimento (vide
+Tabela~\ref{table:bench-sched-chunk}).} enquanto varia as políticas de
+escalonamento e o número de \textit{threads}. Ambas retornam uma lista de
+\texttt{bench\_res}, que é uma estrutura de dados que encapsula as informações
+necessárias para a geração do relatório, definida como:
+
+\begin{verbatim}
+typedef struct bench_res {
+    int chunk_size;
+    double static_sorting_time;
+    double static_input_sorting_time;
+    double dynamic_sorting_time;
+    double dynamic_input_sorting_time;
+    double guided_sorting_time;
+    double guided_input_sorting_time;
+} bench_res;
+\end{verbatim}
+
+Essas funções utilizam internamente 3 funções auxiliares:
+\texttt{calculate\_mean}, \texttt{write\_csv} e \texttt{write\_latex\_tables}. A
+primeira é utilizada para se calcular o tempo médio de execução em cada
+configuração de entrada da função \texttt{count\_sort}, recebendo um vetor de
+tempos de execução (representados como \texttt{double}) e calculando a média
+aritmética desses valores~\footnote{A quantidade de vezes que
+\texttt{count\_sort} deve ser executada por configuração é configurada a partir
+da diretiva \texttt{\#define BENCH\_EXEC\_TIMES N}, onde N é o número de
+execuções}. As duas últimas são mecanismos de exportação dos resultados,
+representando-os no formato CSV ou como um conjunto de tabelas prontas para
+serem importadas em um arquivo \texttt{.tex}~ref{table:bench-sched-chunk,
+table:bench-sched-thread}.
  
 \section{Resultados}
+Conforme explicado na seção anterior, foram realizados dois tipos de
+\textit{benchmark}: um para avaliar o desempenho variando o tamanho do
+\textit{chunk} e outro para avaliar o desempenho variando o número de
+\textit{threads}. Como entrada para o algoritmo, utilizou-se um arquivo contendo
+32768 números de ponto-flutante gerados a partir do método descrito na
+Seção~\ref{sec:data-gen}. Além disso, para cada conjunto de entradas,
+executou-se o algoritmo 3 vezes e calculou-se a média aritmética dos tempos de
+execução, a fim de se obter medidas mais precisas. O teste foi realizado
+executando-se a aplicação com a \textit{flag} \texttt{-bench}, que forneceu a
+seguinte saída:
+
+\begin{verbatim}
+$ ./a.out -bench vec.dat
+===================================================================
+Benchmarking: varying chunk size and scheduling policy
+===================================================================
+Looping...
+Performing iteration 0, chunk size is 1.
+Performing iteration 1, chunk size is 2.
+Performing iteration 2, chunk size is 4.
+Performing iteration 3, chunk size is 8.
+Performing iteration 4, chunk size is 16.
+Performing iteration 5, chunk size is 32.
+Performing iteration 6, chunk size is 64.
+Performing iteration 7, chunk size is 128.
+Performing iteration 8, chunk size is 256.
+Performing iteration 9, chunk size is 512.
+Performing iteration 10, chunk size is 1024.
+Performing iteration 11, chunk size is 2048.
+Performing iteration 12, chunk size is 4096.
+Performing iteration 13, chunk size is 8192.
+Performing iteration 14, chunk size is 16384.
+Performing iteration 15, chunk size is 32768.
+Performing iteration 16, chunk size is 65536.
+Generating output latex tables...
+File 'bench_sched_chunk.tex' successfully generated! :-)
+
+===================================================================
+Benchmarking: varying thread count and scheduling policy
+===================================================================
+Looping...
+Performing iteration 0, thread count is 1.
+Performing iteration 1, thread count is 2.
+Performing iteration 2, thread count is 3.
+Performing iteration 3, thread count is 4.
+Performing iteration 4, thread count is 5.
+Performing iteration 5, thread count is 6.
+Performing iteration 6, thread count is 7.
+Performing iteration 7, thread count is 8.
+Generating output latex tables...
+File 'bench_sched_thread.tex' successfully generated! :-)
+
+Execution time: 2961.464582 seconds.
+\end{verbatim}
+
+A Tabela~\ref{table:bench-sched-chunk} apresenta os resultados da primeira
+análise. Nota-se que em todos os casos, o tamanho de \textit{chunk} ótimo foi 1.
+Além disso, observa-se que o escalonamento estático apresenta desempenho médio
+superior ao dinâmico e ao guiado, e que o impacto de desempenho provocado pela
+leitura dos dados é irrisório nesse caso (em média, inferior à 0.1s).
+
+\begin{table}[h!]
+\label{table:bench-sched-chunk}
+\footnotesize
+\centering
+\caption{Tamanho de \textit{chunk} variável e número de \textit{threads} fixo
+(em 4).}
+\input{./bench_sched_chunk.tex}
+\end{table}
+
+A Tabela~\ref{table:bench-sched-thread} apresenta os resultados da segunda
+análise. 
+
+\begin{table}[h!]
+\label{table:bench-sched-thread}
+\footnotesize
+\centering
+\caption{Tamanho de \textit{chunk} fixo (em 256) e número de \textit{threads}
+variável.}
+\input{./bench_sched_thread.tex}
+\end{table}
+
+O \textit{speedup} de um programa paralelo é definido como:
+
+$$S = \frac{T_{serial}}{T_{parallel}}$$
+
+A Tabela~\ref{table:speedup} apresenta a relação entre o
+\textit{speedup} obtido e o número de \textit{threads} executadas.
+
+\begin{table}[h!]
+\label{table:speedup}
+\footnotesize
+\centering
+\caption{\textit{Speedup} x \textit{threads}.}
+\begin{tabular}{@{}ccccccccc@{}}
+\toprule
+\textit{Threads} & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 \\ \midrule
+\textit{Speedup} & 0.003256 & 0.003484 & 0.003181 & 0.003339 & 0.003351 & 0.003585 \\ \bottomrule 
+\end{tabular}
+
+\end{table}
 
 
 \section{Conclusão}
@@ -110,6 +340,9 @@ possibilitando a experimentação com diferentes configurações. O \textit{desi
 escolhido permite variar de forma fácil a política de escalonamento, o tamanho
 dos \textit{chunks} e a quantidade de \textit{threads} de forma não intrusiva e
 modular.
+Entretanto, é importante frisar que o \textit{design}
+da aplicação favorece a inclusão de novas funções de \textit{benchmark} de forma
+fácil.
 
 %% Booktabs require to add \usepackage{booktabs} to your document preamble
 %\begin{table}[h]
