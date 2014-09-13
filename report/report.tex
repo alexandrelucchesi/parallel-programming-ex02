@@ -164,7 +164,7 @@ estratégia de paralelização adotada:
 A variável \texttt{count} é declarada dentro de uma seção paralela e, portanto,
 é atribuída um escopo privado~\footnote{Poderia-se declarar esse escopo via
 \textit{clauses} dentro do \texttt{pragma}.}. As funções
-\texttt{omp\_set\_num\_threads} e \texttt{omp\_set\_schedule} são padrões do
+\texttt{omp\_set\_num\_threads} e \texttt{omp\_set\_s\\chedule} são padrões do
 OpenMP e consistem em uma forma dinâmica de se configurar, respectivamente, a
 quantidade de \textit{threads}, e a política de escalonamento e o tamanho do
 \textit{chunk}. Esses parâmetros são utilizados em tempo de execução para
@@ -190,7 +190,8 @@ bench_res* bench_sched_thread(const char *filename, int chunk_size,
     int max_threads);
 double calculate_mean(const double *vec, int size);
 void write_csv(bench_res *res, benchType type, int size, FILE *fp);
-void write_latex_tables(bench_res *res, benchType type, int size, FILE *fp);
+void write_latex_tables(bench_res *res, benchType type, int size,
+    FILE *fp);
 \end{verbatim}
 
 A função \texttt{bench} é responsável por orquestrar as funções

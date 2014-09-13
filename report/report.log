@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.1415926-2.5-1.40.14 (TeX Live 2013) (format=pdflatex 2013.10.21)  13 SEP 2014 01:45
+This is pdfTeX, Version 3.1415926-2.5-1.40.14 (TeX Live 2013) (format=pdflatex 2013.10.21)  13 SEP 2014 01:54
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -833,48 +833,37 @@ Package babel Info: Redefining portuges shorthand "|
 Package babel Info: Redefining portuges shorthand "|
 (babel)             in language  on input line 162.
  [3]
-Overfull \hbox (37.68951pt too wide) in paragraph at lines 164--180
-\T1/cmr/m/n/12 atri-buída um es-copo pri-vado [][][]. As fun-ções \T1/fvm/m/n/1
-2 omp_set_num_threads \T1/cmr/m/n/12 e \T1/fvm/m/n/12 omp_set_schedule
- []
-
 Package babel Info: Redefining portuges shorthand "|
 (babel)             in language  on input line 182.
 
-Overfull \hbox (49.22076pt too wide) in paragraph at lines 194--194
-[]\T1/fvm/m/n/12 void write_latex_tables(bench_res *res, benchType type, int si
-ze, FILE *fp);[] 
- []
-
-
-Overfull \hbox (2.43091pt too wide) in paragraph at lines 196--212
+Overfull \hbox (2.43091pt too wide) in paragraph at lines 197--213
 []\T1/cmr/m/n/12 A fun-ção \T1/fvm/m/n/12 bench \T1/cmr/m/n/12 é res-pon-sá-vel
  por or-ques-trar as fun-ções \T1/fvm/m/n/12 bench_sched_chunk
  []
 
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 212.
+(babel)             in language  on input line 213.
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 212.
+(babel)             in language  on input line 213.
 [4]
-Overfull \hbox (2.43839pt too wide) in paragraph at lines 225--237
+Overfull \hbox (2.43839pt too wide) in paragraph at lines 226--238
 []\T1/cmr/m/n/12 Essas fun-ções uti-li-zam in-ter-na-mente 3 fun-ções au-xi-li-
 a-res: \T1/fvm/m/n/12 calculate_mean\T1/cmr/m/n/12 ,
  []
 
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 238.
+(babel)             in language  on input line 239.
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 304.
+(babel)             in language  on input line 305.
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 304.
+(babel)             in language  on input line 305.
 [5] (./bench_sched_chunk.tex)
-Overfull \hbox (3.10214pt too wide) in paragraph at lines 1--311
+Overfull \hbox (3.10214pt too wide) in paragraph at lines 1--312
  [][] 
  []
 
 (./bench_sched_thread.tex)
-Overfull \hbox (18.1818pt too wide) in paragraph at lines 1--326
+Overfull \hbox (18.1818pt too wide) in paragraph at lines 1--327
  [][] 
  []
 
@@ -882,36 +871,36 @@ Overfull \hbox (18.1818pt too wide) in paragraph at lines 1--326
 LaTeX Warning: `!h' float specifier changed to `!ht'.
 
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 342.
+(babel)             in language  on input line 331.
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 342.
+(babel)             in language  on input line 331.
 [6]
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 356.
+(babel)             in language  on input line 357.
 
-Overfull \hbox (14.87605pt too wide) in paragraph at lines 357--364
+Overfull \hbox (14.87605pt too wide) in paragraph at lines 358--365
 \T1/cmr/m/n/12 Este tra-ba-lho pos-si-bi-li-tou uma maior com-pre-en-são acerca
  da bi-bli-o-teca OpenMP
  []
 
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 372.
+(babel)             in language  on input line 366.
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 372.
+(babel)             in language  on input line 366.
 [7] (./report.bbl)
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 376.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 377.
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 376.
+(babel)             in language  on input line 377.
 Package babel Info: Redefining portuges shorthand "|
-(babel)             in language  on input line 376.
+(babel)             in language  on input line 377.
  [8]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 376.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 377.
  (./report.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 376.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 376.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 377.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 377.
 Package rerunfilecheck Info: File `report.out' has not changed.
 (rerunfilecheck)             Checksum: A910C07F8228A24BC193452E814AE794;458.
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 376.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 377.
  ) 
 Here is how much of TeX's memory you used:
  8960 strings out of 493315
@@ -947,7 +936,7 @@ uper/sfti1200.pfb></usr/local/texlive/2013/texmf-dist/fonts/type1/public/cm-sup
 er/sfti1440.pfb>
 
 pdfTeX warning: pdflatex: no GlyphToUnicode entry has been inserted yet!
-Output written on report.pdf (9 pages, 796566 bytes).
+Output written on report.pdf (9 pages, 796552 bytes).
 PDF statistics:
  204 PDF objects out of 1000 (max. 8388607)
  169 compressed objects within 2 object streams
