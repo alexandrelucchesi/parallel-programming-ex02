@@ -26,16 +26,16 @@
 
 \section{Introdução}
 Este relatório tem como objetivo apresentar os resultados obtidos a partir da
-execução do primeiro exercício de programação paralela~\cite{exercise}, que
-consiste na paralelização do algoritmo \emph{count sort} utilizando a
-biblioteca OpenMP\@.  Primeiramente, o algoritmo desenvolvido e a estratégia de
-paralelização utilizada é apresentada. Em seguida, é feita uma análise de
-desempenho comparando os tempos de execução do algoritmo em diversas
-configurações, isto é, variando-se a estratégia de escalonamento, o tamanho dos
-\textit{chunks} e o número de \textit{threads}. O código-fonte completo deste
-trabalho (incluindo os arquivos \LaTeX\xspace que compõem este relatório) estão
-publicamente disponíveis no
-GitHub~\footnote{\url{https://github.com/alexandrelucchesi/parallel-programming-ex01}}.
+execução do segundo exercício de programação paralela~\cite{exercise}, que
+consiste na paralelização do algoritmo \emph{Pi de Monte Carlo} utilizando a
+biblioteca \texttt{pthreads}. Primeiramente, os aspectos principais do
+algoritmo desenvolvido e a estratégia de paralelização utilizada é apresentada.
+Em seguida, é realizada uma análise de desempenho comparando os tempos de
+execução do algoritmo em diversas configurações, isto é, variando-se o número
+de lançamentos (pontos) e o número de \textit{threads}.  O código-fonte
+completo deste trabalho (incluindo os arquivos \LaTeX\xspace que compõem este
+relatório) estão publicamente disponíveis no
+GitHub~\footnote{\url{https://github.com/alexandrelucchesi/parallel-programming-ex02}}.
 
 \subsection{\textit{Hardware} Utilizado}
 \label{sec:hardware}
@@ -53,130 +53,85 @@ GitHub~\footnote{\url{https://github.com/alexandrelucchesi/parallel-programming-
 
 
 \section{O Algoritmo}
-O programa desenvolvido contempla três funcionalidades principais: geração de um
-arquivo de dados contendo um número arbitrário de valores de ponto-flutuante,
-processamento de um único arquivo de dados e a geração de um \textit{benchmark}.
-Essas três funcionalidades são detalhadas nesta seção.
+Além do programa principal, foi desenvolvido um \textit{script bash} para
+automatizar os testes da aplicação. Esses artefatos são descritos a seguir.
 
-\subsection{Geração do Arquivo de Dados}
-\label{sec:data-gen}
-O \textit{count sort} é um algoritmo de ordenação que foi utilizado neste
-trabalho para ordenar um vetor de números de ponto-flutuante. Dessa forma, foi
-necessária a criação de funções para a geração de quantidades configuráveis de
-números de ponto-flutante em um formato apropriado para servir de entrada para o
-programa, possibilitando a fácil experimentação do \textit{count sort} com
-diferentes configurações.
+\begin{itemize}
+	\item \texttt{main.c}: programa em C contendo o código-fonte da aplicação. Após compilado com as respectivas diretivas
+		(\texttt{-lpthread -lmath} --- vide Makefile) recebe via
+		\texttt{scanf()} dois argumentos: o número de \textit{threads} a serem
+		criadas e a quantidade de lançamentos a serem realizados. A saída do
+		programa tem duas linhas: a primeira contém o valor aproximado de Pi e
+		a segunda, o tempo de execução do algoritmo em microsegundos.
+	\item \texttt{test.sh}: \textit{script} desenvolvido para automatizar os
+		testes da aplicação. Recebe como entrada 4 argumentos, em ordem:
+		\begin{itemize}
+			\item \texttt{max\_threads}: número máximo de \textit{threads}. O
+				\textit{script} varia o número de \textit{threads} de 1 até
+				\texttt{max\_threads}.
+			\item \texttt{max\_tosses}: ordem máxima do número de lançamentos, isto
+				é, o \textit{script} executa a aplicação variando o 
+				número de lançamentos, começando em $10^2, 10^3$ até $10^{max\_tosses}$.
+			\item \texttt{max\_count}: número máximo de vezes em que o programa
+				deve ser executado em uma mesma configuração.
+			\item \texttt{max\_time}: \textit{timeout} de execução, ou seja, se o
+				programa não encerrar a execução nesse tempo, ele é finalizado.
+		\end{itemize}
+\end{itemize}
 
-A interface dessas funções é apresentada a seguir:
+\subsection{Geração de números aleatórios}
+Como o método de aproximação do valor de pi é baseado no Método de Monte Carlo,
+é necessária a geração de números aleatórios de ponto-flutuante. Além disso, a
+função que gera esses números tem que ser \textit{thread safe}, uma vez que o
+algoritmo sera paralelizado e o código chamado por várias \textit{threads} ao
+mesmo tempo. Por isso, utilizou-se a função \texttt{rand\_r(unsigned int *)}.
 
-\begin{verbatim}
-void generate_floats(FILE* out, int count);
-int read_input(FILE* fp, float** vector, int* size);
-float* parse_floats(char* values_str, int count);
-\end{verbatim}
+A função inicializadora, \texttt{srand(unsigned int seed)}, foi executada uma
+vez por \textit{thread}. Inicialmente, utilizou-se como semente para
+\texttt{srand} o resultado de uma função temporal (\texttt{time(NULL)}), porém,
+os resultados de pi em múltiplas execuções do programa quando executado a
+partir do \textit{script} estava igual. Acredita-se que isso se deve ao fato
+das várias execuções serem realizadas em um intervalo de tempo muito pequeno,
+pois, acrescentando-se um \texttt{sleep(1)} entre as chamadas, os resultados
+começaram a variar.
 
-A função \texttt{generate\_floats} recebe um arquivo de destino e a quantidade de
-números que se deseja gerar. A função \texttt{read\_input} recebe um arquivo (no
-formato gerado por \texttt{generate\_floats}) e retorna em \texttt{vector} e
-\texttt{size} o vetor e seu tamanho, respectivamente. Por fim, a função
-\texttt{parse\_floats} é utilizada internamente por \texttt{read\_input} para
-realizar o \textit{parsing} de \textit{strings} para \textit{floats}.
+Apesar de correta, a solução com \texttt{sleep()} não é ideal, pois deixa a
+execução dos testes muito lenta, sobretudo se o conjunto de testes for
+abrangente (vide Seção X). Dessa forma, somou-se ao resultado de
+\textit{time(NULL)} um fator para introduzir aleatoridade que é único entre
+várias execuções do programa: o valor de \texttt{getpid()}.
 
-Para gerar um arquivo de dados, \texttt{vec.dat}, contendo, por exemplo, 1000
-elementos, basta executar o binário passando-se a \textit{flag} \texttt{-gen},
-conforme descrito a seguir:
+\subsection{Política de escalonamento}
+Procurou-se similar a política de escalonamento estática encontrada na
+biblioteca OpenMP.  Dessa forma, tenta-se dividir igualmente o trabalho entre
+as \textit{threads} antes da criação ou execução das mesmas. Por exemplo, se a
+entrada do programa for 2 \textit{threads} e 1000 lançamentos, atribui-se
+previamente a cada \textit{thread} o cálculo de 500 lançamentos. Caso a divisão
+não seja exata, ou seja, se a entrada do programa for 2 \textit{threads} e 1005
+lançamentos, o excedente (resto da divisão) é atribuído à primeira
+\textit{thread} criada.
 
-\begin{verbatim}
-$ ./a.out -gen vec.dat 1000
-\end{verbatim}
 
-\subsection{Processamento}
-O processamento de um arquivo de dados foi encapsulado na função
-\texttt{process}, cuja assinatura é apresentada a seguir:
+\subsection{Parâmetros de entrada}
+Se o número de \textit{threads} especificado for menor ou igual a 1, nenhuma
+\textit{thread} é criada e o programa é executado de forma sequencial. É válido
+ressaltar que isso não implicou em redundância de código-fonte, ou seja, no
+\emph{modo sequencial} é executada a mesma função cujo ponteiro seria passado
+para \texttt{pthread\_create()}, porém, sem o \textit{overhead} de criação e
+finalização de \textit{threads}.
 
-\begin{verbatim}
-int process(float **vec, int *vec_size, double *time_sorting_only,
-    double*time_with_input, const char *filename, omp_sched_t kind,
-    int chunk_size, int thread_num);
-void count_sort(float a[], int n,
-    omp_sched_t kind, int chunk_size, int thread_num);
-\end{verbatim}
 
-Os quatro primeiros parâmetros: \texttt{vec}, \texttt{vec\_size},
-\texttt{time\_sorting\_only} e \texttt{time\_with\_input} são, na verdade, retornos
-da função \texttt{process}, e retornam respectivamente, o vetor de
-\textit{floats} ordenado, o tamanho do vetor, o tempo transcorrido considerando
-apenas a execução do \textit{count sort} e o tempo transcorrido desde a entrada
-de dados até o término da execução da função de ordenação. Os demais parâmetros
-são utilizados para parametrizar a execução da função \texttt{count\_sort} e
-equivalem, respectivamente, ao nome do arquivo de dados, à política de
-escalonamento do OpenMP (\textit{static}, \textit{dynamic}, \textit{guided} ou
-\textit{auto}), ao tamanho do \textit{chunk} e ao número de \textit{threads} a
-serem criadas.
-
-Para processar um único arquivo, basta executar o binário passando-se o arquivo
-de dados e \textit{flags} opcionais de seleção da política de escalonamento,
-tamanho do \textit{chunk} ou quantidade de \textit{threads}. Por padrão,
-utiliza-se \texttt{static}, tamanho do \textit{chunk} 1 e o número padrão de
-\textit{threads} do OpenMP (depende da máquina sendo executada). O trecho
-abaixo ilustra o processamento do arquivo \texttt{vec.dat}, com escalonamento
-dinâmico e tamanho de \textit{chunk} 4:
-
-\begin{verbatim}
-$ ./a.out vec.dat -k dynamic -c 4
-\end{verbatim}
-
-Encapsular a lógica de processamento na função \textit{process} permitiu a
-automatização do \textit{benchmarking} da aplicação, por meio do desenvolvimento
-da função \texttt{bench} (apresentada na próxima seção), evitando trabalho
-manual.
-
-A função \texttt{count\_sort} é a principal função da aplicação. Um dos
-objetivos deste trabalho consistiu na experimentação da biblioteca OpenMP\@. O
-trecho de código a seguir apresenta o núcleo da função \texttt{count\_sort} e a
-estratégia de paralelização adotada:
+\subsection{Tipos das variáveis}
+Com o objetivo de se preservar ao máximo os dados provenientes das computações
+e mitigar a perda de precisão por truncamento ou resultados errôneos por
+\textit{overflow}, usou-se em toda a aplicação os tipos \texttt{unsigned long
+long int} e \texttt{long long int} para valores inteiros, e \texttt{long
+double} para valores de ponto flutuante. Utilizou-se \texttt{typedef}s para tornar o código menos verboso e mais 
+legível:
 
 \begin{verbatim}
-...
-    // Set number of threads to be created.
-    if (num_threads > 0) omp_set_num_threads(num_threads);
-#pragma omp parallel
-    {
-        int count; // *Private* variable.
-
-        // Set scheduling policy and chunk size at runtime.
-        omp_set_schedule(kind, chunk_size);
-
-#pragma omp for schedule(runtime)
-        for (int i = 0; i < n; i++) {
-            count = 0;
-            for (int j = 0; j < n; j++)
-                if (a[j] < a[i])
-                    count++;
-                else if (a[j] == a[i] && j < i)
-                    count++;
-            temp[count] = a[i];
-        }
-    }
-...
+typedef unsigned long long int ulli;
 \end{verbatim}
-
-A variável \texttt{count} é declarada dentro de uma seção paralela e, portanto,
-é atribuída um escopo privado~\footnote{Poderia-se declarar esse escopo via
-\textit{clauses} dentro do \texttt{pragma}.}. As funções
-\texttt{omp\_set\_num\_threads} e \texttt{omp\_set\_s\\chedule} são padrões do
-OpenMP e consistem em uma forma dinâmica de se configurar, respectivamente, a
-quantidade de \textit{threads}, e a política de escalonamento e o tamanho do
-\textit{chunk}. Esses parâmetros são utilizados em tempo de execução para
-atribuir tarefas às \textit{threads} dentro do \texttt{for} (observe a
-\textit{clause} \texttt{schedule(runtime)}). O vetor \texttt{temp} é uma
-variável compartilhada que, no término das iterações, contém a sequência de
-números ordenada. É importante notar que nenhum mecanismo de sincronização (como
-a utilização de \textit{locks} ou declarar \texttt{temp} como \emph{critical})
-foi necessário para a criação de uma seção crítica em torno de \texttt{temp},
-uma vez que \texttt{count} retorna um valor diferente (indexando uma posição de
-memória diferente) para cada \textit{thread} e, portanto, não há condições de
-corrida.
 
 
 \subsection{\textit{Benchmark}}
