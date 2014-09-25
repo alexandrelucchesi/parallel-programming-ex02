@@ -1,18 +1,8 @@
 \begin{thebibliography}{1}
 
-\bibitem{main-book}
-Peter Pacheco.
-\newblock {\em An Introduction to Parallel Programming}.
-\newblock Morgan Kaufmann Publishers Inc., San Francisco, CA, USA, 1st edition,
-  2011.
-
 \bibitem{exercise}
 G.~L.~M. Teodoro.
-\newblock Programação paralela, exercício de programação 01, parallel
-  count sort, September 2014.
-
-\bibitem{class-notes}
-G.~L.~M. Teodoro.
-\newblock Programação paralela, notas de aula, September 2014.
+\newblock Programação paralela, exercício de programação 02, pi de monte
+  carlo, September 2014.
 
 \end{thebibliography}
