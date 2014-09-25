@@ -100,12 +100,6 @@ int main(int argc, char *argv[]) {
     
     printf("%Lf\n", pi);
     printf("%llu\n", elapsed);
-    printf("%u\n", getpid());
-//    printf("Pi: %Lf\n", pi);
-//    printf("Elapsed time: %llu us.\n", elapsed);
-//    printf("Max. unsigned long long int: %llu\n", ULLONG_MAX);
-//    printf("Max. double: %e\n", DBL_MAX);
-//    printf("Max. long double: %Le\n", LDBL_MAX);
 
     return 0;
 }
